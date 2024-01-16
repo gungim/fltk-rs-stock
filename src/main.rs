@@ -1,7 +1,6 @@
 use fltk::{
     app::{self, channel},
     enums::Event,
-    frame::Frame,
     group::Flex,
     prelude::{WidgetExt, *},
     window::Window,
@@ -12,12 +11,12 @@ use reqwest::{self, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 
-use std::{env, thread, vec};
-use tokio::time::{sleep, Duration};
+use std::{thread, vec};
+use tokio::time::Duration;
 mod stock;
 use stock::Stock;
 
-async fn call_api() -> Result<Vec<Item>> {
+async fn call_api() -> Vec<Item> {
     let mut items: Vec<Item> = vec![];
 
     let re = Regex::new(r"\}.{0,7}\{").unwrap();
@@ -49,7 +48,7 @@ async fn call_api() -> Result<Vec<Item>> {
             panic!("Uh oh! Something unexpected happened.");
         }
     };
-    Ok(items)
+    items
 }
 
 #[derive(Clone, Copy)]
@@ -63,8 +62,6 @@ enum Message {
 async fn main() {
     // env::set_var("RUST_BACKTRACE", "1");
 
-    let mut items: Vec<Item> = vec![];
-
     let app = app::App::default().with_scheme(app::Scheme::Gtk);
     let theme = ColorTheme::new(color_themes::BLACK_THEME);
     theme.apply();
@@ -73,21 +70,12 @@ async fn main() {
     wind.set_border(false);
 
     let (sender, receiver) = channel::<Message>();
-    thread::spawn(async move || {
+    thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
-        // async {
-        //     let call = call_api().await;
-
-        //     match call {
-        //         Ok(t) => items = t,
-        //         Err(_) => {}
-        //     };
-        // };
-
         sender.send(Message::Tick);
     });
 
-    let flex = Flex::default().size_of(&wind).row();
+    let mut flex = Flex::default().size_of(&wind).row();
     flex.end();
 
     wind.end();
@@ -111,10 +99,20 @@ async fn main() {
         }
     });
 
-    // Stock::new(code_name.as_str(), open_price, close_price);
     while app.wait() {
         match receiver.recv() {
-            Some(Message::Tick) => {}
+            Some(Message::Tick) => {
+                flex.clear();
+                let mut items: Vec<Item> = vec![];
+                items = call_api().await;
+                for i in items {
+                    let code_name = i.symbol.unwrap_or("".to_string());
+                    let open_price = i.open_price.unwrap_or(0.0);
+                    let close_price = i.close_price.unwrap_or(0.0);
+                    let f = Stock::new(code_name.as_str(), open_price, close_price);
+                    flex.add(&*f)
+                }
+            }
             Some(Message::Reset) => {}
             Some(Message::ChangeDuration) => {}
             None => {}
@@ -122,7 +120,7 @@ async fn main() {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Item {
     #[serde(rename = "FloorCode")]
     floor_code: Option<f32>,
