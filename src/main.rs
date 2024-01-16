@@ -1,5 +1,5 @@
 use fltk::{
-    app,
+    app::{self, channel},
     enums::Event,
     frame::Frame,
     group::Flex,
@@ -8,18 +8,16 @@ use fltk::{
 };
 use fltk_theme::{color_themes, ColorTheme};
 use regex::Regex;
-use reqwest;
+use reqwest::{self, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 
-use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
-
-use std::{env, vec};
+use std::{env, thread, vec};
 use tokio::time::{sleep, Duration};
 mod stock;
 use stock::Stock;
 
-async fn call_api() -> Vec<Item> {
+async fn call_api() -> Result<Vec<Item>> {
     let mut items: Vec<Item> = vec![];
 
     let re = Regex::new(r"\}.{0,7}\{").unwrap();
@@ -51,23 +49,21 @@ async fn call_api() -> Vec<Item> {
             panic!("Uh oh! Something unexpected happened.");
         }
     };
-    return items;
+    Ok(items)
+}
+
+#[derive(Clone, Copy)]
+enum Message {
+    Reset,
+    ChangeDuration,
+    Tick,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), JobSchedulerError> {
+async fn main() {
     // env::set_var("RUST_BACKTRACE", "1");
+
     let mut items: Vec<Item> = vec![];
-
-    let mut sched = JobScheduler::new().await?;
-    let job = Job::new_async("*/10 * * * * * *", move |_, _| {
-        Box::pin(async move {
-            items = call_api().await;
-        })
-    })?;
-
-    sched.add(job).await?;
-    sched.start().await;
 
     let app = app::App::default().with_scheme(app::Scheme::Gtk);
     let theme = ColorTheme::new(color_themes::BLACK_THEME);
@@ -76,8 +72,22 @@ async fn main() -> Result<(), JobSchedulerError> {
     let mut wind = Window::new(0, 1600, 400, 50, "Stock");
     wind.set_border(false);
 
-    let flex = Flex::default().size_of(&wind).row();
+    let (sender, receiver) = channel::<Message>();
+    thread::spawn(async move || {
+        thread::sleep(Duration::from_secs(5));
+        // async {
+        //     let call = call_api().await;
 
+        //     match call {
+        //         Ok(t) => items = t,
+        //         Err(_) => {}
+        //     };
+        // };
+
+        sender.send(Message::Tick);
+    });
+
+    let flex = Flex::default().size_of(&wind).row();
     flex.end();
 
     wind.end();
@@ -102,10 +112,14 @@ async fn main() -> Result<(), JobSchedulerError> {
     });
 
     // Stock::new(code_name.as_str(), open_price, close_price);
-
-    app.run().unwrap();
-
-    Ok(())
+    while app.wait() {
+        match receiver.recv() {
+            Some(Message::Tick) => {}
+            Some(Message::Reset) => {}
+            Some(Message::ChangeDuration) => {}
+            None => {}
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
