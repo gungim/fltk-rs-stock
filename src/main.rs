@@ -5,6 +5,7 @@ use mini_view::MiniWindow;
 mod main_window;
 mod mini_view;
 mod stock;
+mod api;
 
 #[tokio::main]
 async fn main() {

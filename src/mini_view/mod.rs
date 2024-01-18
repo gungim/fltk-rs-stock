@@ -1,6 +1,4 @@
-use serde::{Deserialize, Serialize};
-use serde_json::from_str;
-use std::{collections::HashMap, thread};
+use std::thread;
 use tokio::{runtime::Runtime, time::Duration};
 
 use fltk::{
@@ -13,6 +11,8 @@ use fltk::{
 };
 
 use std::ops::{Deref, DerefMut};
+
+use crate::api::{Item, call_api};
 
 pub struct MiniWindow {
     wind: Window,
@@ -134,114 +134,4 @@ impl MiniView {
 
         Self {}
     }
-}
-
-async fn call_api() -> Vec<Item> {
-    let mut items: Vec<Item> = vec![];
-
-    let client = reqwest::Client::new();
-
-    let mut body = HashMap::new();
-    body.insert("rid", "32423542");
-    body.insert("token", "");
-    body.insert("shares", "VIX,ITA,HAG");
-
-    let response = client
-        .post("https://mktapi1.mbs.com.vn/pbResfulMarkets/securities/list")
-        .json(&body)
-        .send()
-        .await
-        .unwrap();
-
-    match response.status() {
-        reqwest::StatusCode::OK => match response.text().await {
-            Ok(txt) => {
-                let res = typed_example(&txt);
-                match res {
-                    Ok(data) => {
-                        items = data.data;
-                    }
-                    Err(_) => {}
-                }
-            }
-            Err(_) => {}
-        },
-        _ => {
-            panic!("Uh oh! Something unexpected happened.");
-        }
-    };
-    items
-}
-#[derive(Serialize, Deserialize, Debug)]
-struct Data {
-    msgid: String,
-    status: String,
-    data: Vec<Item>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Item {
-    sym: String,
-    mlc: String,
-    fp: String,
-    rp: String,
-    cp: String,
-    #[serde(rename = "openP")]
-    open_p: String,
-    #[serde(rename = "closedP")]
-    closed_p: String,
-    #[serde(rename = "openC")]
-    open_c: String,
-    #[serde(rename = "closeC")]
-    close_c: String,
-    bbc1: String,
-    bac2: String,
-    bbc2: String,
-    bac3: String,
-    bac1: String,
-    fsr: String,
-    #[serde(rename = "highestC")]
-    highest_c: String,
-    tvtraded: String,
-    bbv2: String,
-    bav3: String,
-    bbv3: String,
-    #[serde(rename = "avgP")]
-    avg_p: String,
-    bav1: String,
-    fcr: f32,
-    bbv1: String,
-    bav2: String,
-    #[serde(rename = "lowestC")]
-    lowest_c: String,
-    mchv: String,
-    #[serde(rename = "lowestP")]
-    lowest_p: String,
-    trdses: String,
-    #[serde(rename = "avgC")]
-    avg_c: String,
-    bbc3: String,
-    side: String,
-    mp: String,
-    tstraded: String,
-    ftr: f32,
-    trss: String,
-    msgid: String,
-    mv: String,
-    bbp2: String,
-    bap3: String,
-    mchp: f32,
-    bbp3: String,
-    bap1: String,
-    bbp1: String,
-    bap2: String,
-    fbr: String,
-    #[serde(rename = "highestP")]
-    highest_p: String,
-    trbs: String,
-}
-
-fn typed_example(data: &str) -> serde_json::Result<Data> {
-    let p: Data = from_str(data)?;
-    Ok(p)
 }
