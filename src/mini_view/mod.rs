@@ -1,7 +1,6 @@
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
-use std::thread;
+use std::{collections::HashMap, thread};
 use tokio::{runtime::Runtime, time::Duration};
 
 use fltk::{
@@ -123,9 +122,9 @@ impl MiniView {
             Some(Message::Tick(items)) => {
                 cols.clear();
                 for i in items {
-                    let code_name = i.symbol.unwrap_or("".to_string());
-                    let open_price = i.open_price.unwrap_or(0.0);
-                    let close_price = i.close_price.unwrap_or(0.0);
+                    let code_name = i.sym;
+                    let open_price: f32 = i.open_p.parse::<f32>().unwrap_or(0.0);
+                    let close_price: f32 = i.closed_p.parse::<f32>().unwrap_or(0.0);
                     let f = ItemCpn::new(code_name.as_str(), open_price, close_price);
                     cols.add(&*f)
                 }
@@ -140,26 +139,29 @@ impl MiniView {
 async fn call_api() -> Vec<Item> {
     let mut items: Vec<Item> = vec![];
 
-    let re = Regex::new(r"\}.{0,7}\{").unwrap();
     let client = reqwest::Client::new();
 
+    let mut body = HashMap::new();
+    body.insert("rid", "32423542");
+    body.insert("token", "");
+    body.insert("shares", "VIX,ITA,HAG");
+
     let response = client
-        .get("https://s.cafef.vn/Ajax/PageNew/RealtimePricesHeader.ashx?symbols=VIX;IDI;SCR")
+        .post("https://mktapi1.mbs.com.vn/pbResfulMarkets/securities/list")
+        .json(&body)
         .send()
         .await
         .unwrap();
+
     match response.status() {
         reqwest::StatusCode::OK => match response.text().await {
             Ok(txt) => {
-                let s_split = &txt[8..txt.len() - 2];
-                let a: Vec<&str> = re.split(s_split).collect();
-                for item in a {
-                    let item_str = "{".to_owned() + item + "}";
-                    let value = typed_example(item_str.as_str());
-                    match value {
-                        Ok(t) => items.push(t),
-                        Err(_) => {}
+                let res = typed_example(&txt);
+                match res {
+                    Ok(data) => {
+                        items = data.data;
                     }
+                    Err(_) => {}
                 }
             }
             Err(_) => {}
@@ -170,88 +172,76 @@ async fn call_api() -> Vec<Item> {
     };
     items
 }
+#[derive(Serialize, Deserialize, Debug)]
+struct Data {
+    msgid: String,
+    status: String,
+    data: Vec<Item>,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Item {
-    #[serde(rename = "FloorCode")]
-    floor_code: Option<f32>,
-    #[serde(rename = "Symbol")]
-    symbol: Option<String>,
-    #[serde(rename = "LastTradeDate")]
-    last_trade_date: Option<String>,
-    #[serde(rename = "Price")]
-    price: Option<f32>,
-    #[serde(rename = "RefPrice")]
-    ref_price: Option<f32>,
-    #[serde(rename = "FloorPrice")]
-    floor_price: Option<f32>,
-    #[serde(rename = "CeilingPrice")]
-    ceiling_price: Option<f32>,
-    #[serde(rename = "Volume")]
-    volume: Option<f32>,
-    #[serde(rename = "Value")]
-    value: Option<f32>,
-    #[serde(rename = "HighPrice")]
-    high_price: Option<f32>,
-    #[serde(rename = "LowPrice")]
-    low_price: Option<f32>,
-    #[serde(rename = "AvgPrice")]
-    avg_price: Option<f32>,
-    #[serde(rename = "BidPrice01")]
-    bid_price_01: Option<f32>,
-    #[serde(rename = "BidPrice02")]
-    bid_price_02: Option<f32>,
-    #[serde(rename = "BidPrice03")]
-    bid_price_03: Option<f32>,
-    #[serde(rename = "BidVolume01")]
-    bid_volume_01: Option<f32>,
-    #[serde(rename = "BidVolume02")]
-    bid_volume_02: Option<f32>,
-    #[serde(rename = "BidVolume03")]
-    vid_volume_03: Option<f32>,
-    #[serde(rename = "AskVolume01")]
-    ask_price_01: Option<f32>,
-    #[serde(rename = "AskPrice02")]
-    ask_price_02: Option<f32>,
-    #[serde(rename = "AskVolume03")]
-    ask_price_03: Option<f32>,
-    #[serde(rename = "AskVolume01")]
-    ask_volume_01: Option<f32>,
-    #[serde(rename = "AskVolume02")]
-    ask_volume_02: Option<f32>,
-    #[serde(rename = "AskVolume03")]
-    ask_volume_03: Option<f32>,
-    #[serde(rename = "BidTotalVolume")]
-    bid_total_volume: Option<f32>,
-    #[serde(rename = "BidTotalOrder")]
-    bid_total_order: Option<f32>,
-    #[serde(rename = "AskTotalVolume")]
-    ask_total_volume: Option<f32>,
-    #[serde(rename = "AskTotalOrder")]
-    ask_total_order: Option<f32>,
-    #[serde(rename = "OpenPrice")]
-    open_price: Option<f32>,
-    #[serde(rename = "ClosePrice")]
-    close_price: Option<f32>,
-    #[serde(rename = "ForeignBuyVolume")]
-    foreign_buy_volume: Option<f32>,
-    #[serde(rename = "ForeignBuyValue")]
-    foreign_buy_value: Option<f32>,
-    #[serde(rename = "ForeignSellVolume")]
-    foreign_sell_volume: Option<f32>,
-    #[serde(rename = "ForeignSellValue")]
-    foreign_sell_value: Option<f32>,
-    #[serde(rename = "ForeignNetVolume")]
-    foreign_net_volume: Option<f32>,
-    #[serde(rename = "ForeignCurrentRoom")]
-    foreign_current_room: Option<f32>,
-    #[serde(rename = "ForeignTotalRoom")]
-    foreign_total_room: Option<f32>,
-    #[serde(rename = "LastVolume")]
-    last_volume: Option<f32>,
+    sym: String,
+    mlc: String,
+    fp: String,
+    rp: String,
+    cp: String,
+    #[serde(rename = "openP")]
+    open_p: String,
+    #[serde(rename = "closedP")]
+    closed_p: String,
+    #[serde(rename = "openC")]
+    open_c: String,
+    #[serde(rename = "closeC")]
+    close_c: String,
+    bbc1: String,
+    bac2: String,
+    bbc2: String,
+    bac3: String,
+    bac1: String,
+    fsr: String,
+    #[serde(rename = "highestC")]
+    highest_c: String,
+    tvtraded: String,
+    bbv2: String,
+    bav3: String,
+    bbv3: String,
+    #[serde(rename = "avgP")]
+    avg_p: String,
+    bav1: String,
+    fcr: f32,
+    bbv1: String,
+    bav2: String,
+    #[serde(rename = "lowestC")]
+    lowest_c: String,
+    mchv: String,
+    #[serde(rename = "lowestP")]
+    lowest_p: String,
+    trdses: String,
+    #[serde(rename = "avgC")]
+    avg_c: String,
+    bbc3: String,
+    side: String,
+    mp: String,
+    tstraded: String,
+    ftr: f32,
+    trss: String,
+    msgid: String,
+    mv: String,
+    bbp2: String,
+    bap3: String,
+    mchp: f32,
+    bbp3: String,
+    bap1: String,
+    bbp1: String,
+    bap2: String,
+    fbr: String,
+    #[serde(rename = "highestP")]
+    highest_p: String,
+    trbs: String,
 }
 
-fn typed_example(data: &str) -> serde_json::Result<Item> {
-    let p: Item = from_str(data)?;
+fn typed_example(data: &str) -> serde_json::Result<Data> {
+    let p: Data = from_str(data)?;
     Ok(p)
 }
