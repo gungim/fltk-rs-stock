@@ -6,13 +6,14 @@ use tokio::{runtime::Runtime, time::Duration};
 
 use fltk::{
     app::{self, channel},
-    enums::Event,
+    enums::{Color, Event},
+    frame::Frame,
     group::{Flex, Pack, PackType},
     prelude::{GroupExt, WidgetBase, WidgetExt, WindowExt},
     window::Window,
 };
 
-use crate::stock::Stock;
+use std::ops::{Deref, DerefMut};
 
 pub struct MiniWindow {
     wind: Window,
@@ -49,14 +50,58 @@ impl MiniWindow {
     }
 }
 
+pub struct ItemCpn {
+    flex: Flex,
+}
+impl ItemCpn {
+    pub fn new(code: &str, open: f32, close: f32) -> Self {
+        let flex = Flex::default().row().center_of_parent();
+        let mut code_label = Frame::default();
+        let mut close_label = Frame::default();
+        let mut diff_label = Frame::default();
+        let diff = close - open;
+
+        code_label.set_label(code);
+        close_label.set_label(format!("{:.2}", close).as_str());
+        diff_label.set_label(format!("{:.2}", diff).as_str());
+
+        let color: Color;
+
+        if open < close {
+            color = Color::Green;
+        } else if open > close {
+            color = Color::Red;
+        } else {
+            color = Color::Yellow;
+        }
+        code_label.set_label_color(color);
+        close_label.set_label_color(color);
+        diff_label.set_label_color(color);
+
+        Self { flex }
+    }
+}
+
+impl Deref for ItemCpn {
+    type Target = Flex;
+
+    fn deref(&self) -> &Self::Target {
+        &self.flex
+    }
+}
+
+impl DerefMut for ItemCpn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.flex
+    }
+}
+
 #[derive(Clone)]
 enum Message {
     Tick(Vec<Item>),
 }
 
-pub struct MiniView {
-    pack: Pack,
-}
+pub struct MiniView {}
 impl MiniView {
     pub fn new() -> Self {
         let mut pack = Pack::default().size_of_parent().center_of_parent();
@@ -81,17 +126,17 @@ impl MiniView {
                     let code_name = i.symbol.unwrap_or("".to_string());
                     let open_price = i.open_price.unwrap_or(0.0);
                     let close_price = i.close_price.unwrap_or(0.0);
-                    let f = Stock::new(code_name.as_str(), open_price, close_price);
+                    let f = ItemCpn::new(code_name.as_str(), open_price, close_price);
                     cols.add(&*f)
                 }
             }
             None => {}
         });
 
-        Self { pack }
+        Self {}
     }
 }
-#[must_use]
+
 async fn call_api() -> Vec<Item> {
     let mut items: Vec<Item> = vec![];
 
