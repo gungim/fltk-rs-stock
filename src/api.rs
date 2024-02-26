@@ -2,15 +2,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 use std::collections::HashMap;
 
+use crate::database::StockDB;
+
 pub async fn call_api() -> Vec<Item> {
     let mut items: Vec<Item> = vec![];
 
     let client = reqwest::Client::new();
 
+    let codes: String = StockDB::get_codes().join(",");
+
     let mut body = HashMap::new();
     body.insert("rid", "32423542");
     body.insert("token", "");
-    body.insert("shares", "VIX,ITA,HAG");
+    body.insert("shares", codes.as_str());
 
     let response = client
         .post("https://mktapi1.mbs.com.vn/pbResfulMarkets/securities/list")

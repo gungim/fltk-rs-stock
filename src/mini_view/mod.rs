@@ -7,19 +7,20 @@ use fltk::{
     frame::Frame,
     group::{Flex, Pack, PackType},
     prelude::{GroupExt, WidgetBase, WidgetExt, WindowExt},
-    window::Window,
+    window::{DoubleWindow, Window},
 };
 
 use std::ops::{Deref, DerefMut};
 
-use crate::api::{Item, call_api};
+use crate::api::{call_api, Item};
 
+#[derive(Clone)]
 pub struct MiniWindow {
-    wind: Window,
+    wind: DoubleWindow,
 }
 impl MiniWindow {
     pub fn new() -> Self {
-        let mut wind = Window::new(0, 1600, 400, 50, "Mini view");
+        let mut wind = DoubleWindow::new(0, 1600, 400, 50, "Mini view");
         wind.set_border(false);
         MiniView::new();
 
@@ -46,6 +47,20 @@ impl MiniWindow {
                 _ => false,
             }
         });
+    }
+}
+
+impl Deref for MiniWindow {
+    type Target = Window;
+
+    fn deref(&self) -> &Self::Target {
+        &self.wind
+    }
+}
+
+impl DerefMut for MiniWindow {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.wind
     }
 }
 

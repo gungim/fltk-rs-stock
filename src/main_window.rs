@@ -1,19 +1,26 @@
-use std::fmt::Alignment;
-
 use fltk::{
     button::Button,
     enums::Color,
     frame::Frame,
     group::{experimental::Grid, Flex, Pack, PackType, Scroll},
     input::Input,
-    prelude::{GroupExt, InputExt, ValuatorExt, WidgetBase, WidgetExt, WindowExt},
+    prelude::{GroupExt, InputExt, WidgetBase, WidgetExt, WindowExt},
     valuator::ScrollbarType,
     window::Window,
 };
-pub struct MainWindow {}
+
+use crate::{database::StockDB, mini_view::MiniWindow};
+
+pub struct MainWindow {
+    whitelist_wg: Pack,
+    whitelist: Vec<String>,
+    wind: Window,
+    btn_mini_w: Button,
+}
+
 impl MainWindow {
     pub fn new() -> Self {
-        let mut code_list: Vec<&str> = vec!["IDI", "VIX", "HAG"];
+        let whitelist = vec![];
         let mut wind = Window::default();
         wind.set_size(1000, 800);
         wind.set_label("VNINDEX");
@@ -24,43 +31,72 @@ impl MainWindow {
             .with_type(PackType::Vertical);
         let mut app_bar = AppBar::new();
         app_bar.set_size(component.w(), 32);
-        let mut code_list_cpn = Scroll::default().with_size(300, wind.h());
-        code_list_cpn.set_color(Color::Red);
 
-        let mut cols = Pack::default();
-        cols.set_spacing(10);
-        cols.set_size(code_list_cpn.w() - 8, component.h());
-        cols.end();
+        let grid = Pack::default()
+            .size_of_parent()
+            .with_type(PackType::Horizontal);
 
-        code_list_cpn.end();
+        let mut side_bar_wg = Pack::default().with_size(200, wind.h());
+        side_bar_wg.set_color(Color::Red);
 
+        let mut side_bar_scroll = Scroll::default().size_of_parent();
+        side_bar_scroll.set_scrollbar_size(7);
+        side_bar_scroll.set_color(Color::Red);
+        let btn_mini_w = Button::default()
+            .with_size(200, 32)
+            .with_label("Open mini view");
+
+        let mut whitelist_wg = Pack::default();
+        whitelist_wg.set_spacing(5);
+        whitelist_wg.set_size(side_bar_wg.w() - 8, component.h());
+        whitelist_wg.end();
+
+        side_bar_wg.end();
+
+        grid.end();
         component.end();
+
         wind.end();
-        wind.show();
 
-        wind.center_screen();
-
-        code_list_cpn.set_scrollbar_size(7);
-        code_list_cpn.make_resizable(false);
-
-        let mut scrollbar = code_list_cpn.scrollbar();
+        let mut scrollbar = side_bar_scroll.scrollbar();
         scrollbar.set_type(ScrollbarType::Vertical);
         scrollbar.set_color(Color::from_u32(0x757575));
         scrollbar.set_selection_color(Color::Gray0);
 
-        for i in code_list {
-            let item_cpn = Pack::default().with_size(code_list_cpn.w() - 10, 30);
-            let mut btn = Button::default().size_of_parent().with_label(i);
-            btn.set_color(Color::White);
-            cols.add(&item_cpn);
-        }
-        let mut btn_mini_view = Button::new(0, 0, code_list_cpn.w() - 10, 30, "Open mini view");
-        cols.add(&btn_mini_view);
-        btn_mini_view.set_callback(|b| {
-            b.set_label("Close");
-        });
+        let mut g = Self {
+            whitelist_wg,
+            whitelist,
+            wind,
+            btn_mini_w,
+        };
+        g.update_whitelist();
+        g.open_mini_w();
+        g
+    }
 
-        Self {}
+    pub fn update_whitelist(&mut self) {
+        self.whitelist = StockDB::get_codes();
+        for i in &self.whitelist {
+            let btn = Button::new(0, 0, 280, 32, i.to_string().as_str());
+            self.whitelist_wg.add(&btn)
+        }
+    }
+
+    pub fn show(mut self) {
+        self.wind.show();
+        self.wind.center_screen();
+    }
+    pub fn hide(mut self){
+        self.wind.hide();
+
+    }
+
+    pub fn open_mini_w(&mut self) {
+        self.btn_mini_w.set_callback(move |_| {
+            let mini_w = MiniWindow::new();
+            mini_w.show();
+            self.hide();
+        })
     }
 }
 
@@ -72,7 +108,7 @@ pub struct AppBar {
 }
 impl AppBar {
     pub fn new() -> Self {
-        let mut grid = Grid::default_fill().size_of_parent();
+        let mut grid = Grid::default();
         let img = Frame::default().with_label("VNINDEX");
         let input = Input::default();
         let btn = Button::default().with_label("Search");
@@ -93,9 +129,11 @@ impl AppBar {
 
     fn register_default_callback(&mut self) {
         self.btn.set_callback({
-            let input = self.input.clone();
             move |_| {
-                println!("Occupation: {}", input.value());
+                let data = StockDB::get_codes();
+                for i in data {
+                    println!("{:?}", i)
+                }
             }
         });
     }
